@@ -14,7 +14,7 @@ interface EnergyRecord {
   p1_counter_gas: number | null;
 }
 
-async function migrateData() {
+async function migrateData(startIndex: number = 0, batchSize: number = 10) {
   try {
     // First ensure the energy_prices table exists
     await sql.query(`
@@ -34,45 +34,40 @@ async function migrateData() {
     const dbPath = path.join(process.cwd(), 'db-to-migrate', 'energy.db');
     const db = new Database(dbPath);
 
-    // Get all records from SQLite
-    const records = db.prepare('SELECT * FROM prices ORDER BY date ASC').all() as EnergyRecord[];
-    console.log(`Found ${records.length} records to migrate`);
+    // Get total count
+    const totalCount = db.prepare('SELECT COUNT(*) as count FROM prices').get() as { count: number };
+
+    // Get records for this batch
+    const records = db.prepare('SELECT * FROM prices ORDER BY date ASC LIMIT ? OFFSET ?')
+      .all(batchSize, startIndex) as EnergyRecord[];
 
     let successCount = 0;
     let errorCount = 0;
 
-    // Process records in batches
-    const BATCH_SIZE = 100;
-    for (let i = 0; i < records.length; i += BATCH_SIZE) {
-      const batch = records.slice(i, i + BATCH_SIZE);
-      
+    // Process records
+    for (const record of records) {
       try {
-        // Process each record in the batch
-        for (const record of batch) {
-          const timestamp = new Date(record.date).toISOString();
-          await sql.query(`
-            INSERT INTO energy_prices (
-              timestamp,
-              price_energy,
-              p1_counter_energy,
-              price_gas,
-              p1_counter_gas
-            ) 
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (timestamp) DO UPDATE SET
-              price_energy = EXCLUDED.price_energy,
-              p1_counter_energy = EXCLUDED.p1_counter_energy,
-              price_gas = EXCLUDED.price_gas,
-              p1_counter_gas = EXCLUDED.p1_counter_gas
-          `, [timestamp, record.price_energy, record.p1_counter_energy, record.price_gas, record.p1_counter_gas]);
-          
-          successCount++;
-        }
-
-        console.log(`Migrated batch ${i / BATCH_SIZE + 1}, total progress: ${successCount}/${records.length}`);
+        const timestamp = new Date(record.date).toISOString();
+        await sql.query(`
+          INSERT INTO energy_prices (
+            timestamp,
+            price_energy,
+            p1_counter_energy,
+            price_gas,
+            p1_counter_gas
+          ) 
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (timestamp) DO UPDATE SET
+            price_energy = EXCLUDED.price_energy,
+            p1_counter_energy = EXCLUDED.p1_counter_energy,
+            price_gas = EXCLUDED.price_gas,
+            p1_counter_gas = EXCLUDED.p1_counter_gas
+        `, [timestamp, record.price_energy, record.p1_counter_energy, record.price_gas, record.p1_counter_gas]);
+        
+        successCount++;
       } catch (error) {
-        console.error(`Error migrating batch ${i / BATCH_SIZE + 1}:`, error);
-        errorCount += batch.length;
+        console.error('Error inserting record:', error);
+        errorCount++;
       }
     }
 
@@ -81,11 +76,19 @@ async function migrateData() {
 
     return {
       success: true,
-      message: 'Migration completed',
+      message: 'Batch migration completed',
       results: {
         successful: successCount,
         failed: errorCount,
-        total: records.length
+        total: totalCount.count,
+        currentBatch: {
+          start: startIndex,
+          size: batchSize,
+          processed: records.length
+        },
+        progress: `${startIndex + records.length}/${totalCount.count} records processed`,
+        isComplete: startIndex + records.length >= totalCount.count,
+        nextBatch: startIndex + records.length < totalCount.count ? startIndex + records.length : null
       }
     };
   } catch (error) {
@@ -97,9 +100,16 @@ async function migrateData() {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const result = await migrateData();
+    const { searchParams } = new URL(request.url);
+    const startIndex = parseInt(searchParams.get('start') || '0', 10);
+    const batchSize = parseInt(searchParams.get('batch') || '10', 10);
+
+    // Limit batch size to prevent timeouts
+    const limitedBatchSize = Math.min(batchSize, 50);
+
+    const result = await migrateData(startIndex, limitedBatchSize);
     return NextResponse.json(result);
   } catch (error) {
     console.error('Failed to run migration:', error);

@@ -80,25 +80,7 @@ async function migrateData() {
   }
 }
 
-export async function GET(request: Request) {
-  // Check for authorization
-  const authHeader = request.headers.get('authorization');
-  const expectedToken = process.env.MIGRATION_SECRET;
-
-  if (!expectedToken) {
-    return NextResponse.json(
-      { error: 'MIGRATION_SECRET not configured' },
-      { status: 500 }
-    );
-  }
-
-  if (authHeader !== `Bearer ${expectedToken}`) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    );
-  }
-
+export async function GET() {
   try {
     const result = await migrateData();
     return NextResponse.json(result);

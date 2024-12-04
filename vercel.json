@@ -7,6 +7,6 @@
   "regions": ["arn1"],
   "crons": [{
     "path": "/api/metrics/weather",
-    "schedule": "*/30 * * * *"
+    "schedule": "0 0 * * *"
   }]
 } 

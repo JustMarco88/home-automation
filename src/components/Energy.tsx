@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import useSWR from 'swr';
+import { useSWR } from 'swr';
 import { EnergyPrice } from '@/lib/energy';
 import { Line } from 'react-chartjs-2';
 import {

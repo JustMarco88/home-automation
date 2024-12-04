@@ -1,42 +1,27 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { sql } from '@vercel/postgres';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const days = parseInt(searchParams.get('days') || '7', 10);
-    const limit = Math.min(days * 24, 720); // Max 30 days of hourly data
+    const hours = parseInt(searchParams.get('hours') || '24', 10);
+    const limit = Math.min(Math.max(1, hours), 168); // Between 1 and 168 (1 week)
 
-    const query = `
-      SELECT 
-        timestamp,
-        temp,
-        feels_like,
-        humidity,
-        description,
-        icon,
-        wind_speed,
-        wind_deg,
-        pressure,
-        clouds,
-        rain_1h,
-        snow_1h
+    const result = await sql`
+      SELECT *
       FROM weather_history
-      WHERE timestamp > NOW() - INTERVAL '${days} days'
+      WHERE timestamp >= NOW() - INTERVAL '${limit} hours'
       ORDER BY timestamp DESC
-      LIMIT $1
     `;
 
-    const result = await db.query(query, [limit]);
-    
-    return NextResponse.json({ 
-      data: result.rows,
-      count: result.rowCount
-    });
+    return NextResponse.json({ success: true, data: result.rows });
   } catch (error) {
     console.error('Error fetching weather history:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch weather history' },
+      { success: false, error: 'Failed to fetch weather history' },
       { status: 500 }
     );
   }

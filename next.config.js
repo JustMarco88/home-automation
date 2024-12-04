@@ -10,6 +10,7 @@ const nextConfig = {
         pathname: '/img/wn/**',
       },
     ],
+    domains: ['openweathermap.org'],
   },
 }
 

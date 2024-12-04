@@ -1,3 +1,5 @@
+'use client';
+
 import Weather from '@/components/Weather';
 import Energy from '@/components/Energy';
 

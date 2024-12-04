@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import useSWR from 'swr';
+import { SWRConfig, SWRResponse } from 'swr';
+import useSWRImmutable from 'swr/immutable';
+import Image from 'next/image';
 import { Line } from 'react-chartjs-2';
 
 interface WeatherData {
@@ -28,7 +30,7 @@ interface WeatherResponse {
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Weather() {
-  const { data: response, error, isLoading } = useSWR<WeatherResponse>(
+  const { data: response, error, isLoading } = useSWRImmutable<WeatherResponse>(
     '/api/metrics/weather',
     fetcher,
     {
@@ -74,9 +76,11 @@ export default function Weather() {
         </div>
       </div>
       <div className="flex flex-col items-center">
-        <img
+        <Image
           src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
           alt={weather.description}
+          width={80}
+          height={80}
           className="w-20 h-20"
         />
         <div className="text-4xl font-bold mb-2">{weather.temp}°C</div>

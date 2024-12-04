@@ -1,5 +1,8 @@
+'use client';
+
 import { useEffect } from 'react';
-import useSWR from 'swr';
+import { SWRConfig, SWRResponse } from 'swr';
+import useSWRImmutable from 'swr/immutable';
 import { EnergyPrice } from '@/lib/energy';
 import { Line } from 'react-chartjs-2';
 import {
@@ -30,7 +33,7 @@ ChartJS.register(
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Energy() {
-  const { data, error, isLoading } = useSWR<{ data: EnergyPrice[] }>(
+  const { data, error, isLoading } = useSWRImmutable<{ data: EnergyPrice[] }>(
     '/api/metrics/energy',
     fetcher,
     {

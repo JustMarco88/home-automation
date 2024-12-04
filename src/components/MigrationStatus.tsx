@@ -124,24 +124,29 @@ export default function MigrationStatus() {
       <div>
         <h3 className="text-lg font-medium mb-2">Migration History</h3>
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {migrationHistory.map((result, index) => (
-            <div
-              key={index}
-              className={`p-3 rounded text-sm ${
-                result.success ? 'bg-green-50' : 'bg-red-50'
-              }`}
-            >
-              <p className="font-medium">
-                Batch {result.results?.currentBatch.start} -{' '}
-                {result.results?.currentBatch.start + result.results?.currentBatch.processed}
-              </p>
-              <p>
-                Success: {result.results?.successful} | Failed:{' '}
-                {result.results?.failed}
-              </p>
-              {result.error && <p className="text-red-500">{result.error}</p>}
-            </div>
-          ))}
+          {migrationHistory.map((result, index) => {
+            const start = result.results?.currentBatch?.start ?? 0;
+            const processed = result.results?.currentBatch?.processed ?? 0;
+            const successful = result.results?.successful ?? 0;
+            const failed = result.results?.failed ?? 0;
+
+            return (
+              <div
+                key={index}
+                className={`p-3 rounded text-sm ${
+                  result.success ? 'bg-green-50' : 'bg-red-50'
+                }`}
+              >
+                <p className="font-medium">
+                  Batch {start} - {start + processed}
+                </p>
+                <p>
+                  Success: {successful} | Failed: {failed}
+                </p>
+                {result.error && <p className="text-red-500">{result.error}</p>}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

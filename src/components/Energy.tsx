@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { SWRConfig, SWRResponse } from 'swr';
-import useSWRImmutable from 'swr/immutable';
+import useSWR from 'swr';
 import { EnergyPrice } from '@/lib/energy';
 import { Line } from 'react-chartjs-2';
 import {
@@ -30,26 +29,39 @@ ChartJS.register(
   TimeScale
 );
 
+interface ApiResponse {
+  success: boolean;
+  data?: EnergyPrice[];
+  error?: string;
+  details?: string;
+}
+
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Energy() {
-  const { data, error, isLoading } = useSWRImmutable<{ data: EnergyPrice[] }>(
+  const { data: response, error, isLoading } = useSWR<ApiResponse>(
     '/api/metrics/energy',
     fetcher,
     {
       refreshInterval: 300000, // Refresh every 5 minutes
+      revalidateOnFocus: false,
     }
   );
 
-  if (error) {
+  if (error || (response && !response.success)) {
     return (
       <div className="bg-red-50 p-4 rounded-lg">
-        <p className="text-red-800">Failed to load energy data</p>
+        <p className="text-red-800">
+          {response?.error || 'Failed to load energy data'}
+          {response?.details && (
+            <span className="block text-sm mt-1">{response.details}</span>
+          )}
+        </p>
       </div>
     );
   }
 
-  if (isLoading || !data) {
+  if (isLoading || !response?.data) {
     return (
       <div className="animate-pulse bg-gray-100 p-4 rounded-lg">
         <div className="h-64 bg-gray-200 rounded"></div>
@@ -57,15 +69,23 @@ export default function Energy() {
     );
   }
 
-  const prices = data.data.sort((a: EnergyPrice, b: EnergyPrice) => 
+  const prices = [...response.data].sort((a, b) => 
     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
+
+  if (prices.length === 0) {
+    return (
+      <div className="bg-yellow-50 p-4 rounded-lg">
+        <p className="text-yellow-800">No energy data available</p>
+      </div>
+    );
+  }
 
   const chartData = {
     datasets: [
       {
         label: 'Energy Price (€/kWh)',
-        data: prices.map((p: EnergyPrice) => ({
+        data: prices.map((p) => ({
           x: new Date(p.timestamp),
           y: p.priceEnergy
         })),
@@ -75,7 +95,7 @@ export default function Energy() {
       },
       {
         label: 'Gas Price (€/m³)',
-        data: prices.map((p: EnergyPrice) => ({
+        data: prices.map((p) => ({
           x: new Date(p.timestamp),
           y: p.priceGas
         })),

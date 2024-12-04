@@ -3,6 +3,14 @@ import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import path from 'path';
 
+interface EnergyRecord {
+  date: string;
+  price_energy: number | null;
+  p1_counter_energy: number | null;
+  price_gas: number | null;
+  p1_counter_gas: number | null;
+}
+
 async function migrateData() {
   try {
     // Open SQLite database
@@ -12,7 +20,7 @@ async function migrateData() {
     });
 
     // Get all records from SQLite
-    const records = await db.all('SELECT * FROM prices ORDER BY date ASC');
+    const records = await db.all<EnergyRecord[]>('SELECT * FROM prices ORDER BY date ASC');
     console.log(`Found ${records.length} records to migrate`);
 
     // Batch size for inserting
@@ -25,37 +33,30 @@ async function migrateData() {
       const batch = records.slice(i, i + BATCH_SIZE);
       
       try {
-        // Create values string for the batch
-        const values = batch.map((record, index) => {
-          const offset = i + index + 1;
-          return `($${offset * 4 - 3}, $${offset * 4 - 2}, $${offset * 4 - 1}, $${offset * 4})`;
-        }).join(',');
-
-        // Flatten parameters for the query
-        const params = batch.flatMap(record => [
-          new Date(record.date),
-          record.price_energy,
-          record.p1_counter_energy,
-          record.price_gas,
-          record.p1_counter_gas
-        ]);
-
-        // Insert batch into PostgreSQL
-        await sql`
-          INSERT INTO energy_prices (
-            timestamp,
-            price_energy,
-            p1_counter_energy,
-            price_gas,
-            p1_counter_gas
-          ) 
-          VALUES ${sql(values)}
-          ON CONFLICT (timestamp) DO UPDATE SET
-            price_energy = EXCLUDED.price_energy,
-            p1_counter_energy = EXCLUDED.p1_counter_energy,
-            price_gas = EXCLUDED.price_gas,
-            p1_counter_gas = EXCLUDED.p1_counter_gas
-        `;
+        // Process each record in the batch
+        for (const record of batch) {
+          await sql`
+            INSERT INTO energy_prices (
+              timestamp,
+              price_energy,
+              p1_counter_energy,
+              price_gas,
+              p1_counter_gas
+            ) 
+            VALUES (
+              ${new Date(record.date)},
+              ${record.price_energy},
+              ${record.p1_counter_energy},
+              ${record.price_gas},
+              ${record.p1_counter_gas}
+            )
+            ON CONFLICT (timestamp) DO UPDATE SET
+              price_energy = EXCLUDED.price_energy,
+              p1_counter_energy = EXCLUDED.p1_counter_energy,
+              price_gas = EXCLUDED.price_gas,
+              p1_counter_gas = EXCLUDED.p1_counter_gas
+          `;
+        }
 
         successCount += batch.length;
         console.log(`Migrated batch ${i / BATCH_SIZE + 1}, total progress: ${successCount}/${records.length}`);

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "migrate": "ts-node scripts/migrate-sqlite.ts"
+    "migrate": "ts-node --project scripts/tsconfig.json scripts/migrate-sqlite.ts"
   },
   "dependencies": {
     "@vercel/analytics": "^1.1.1",

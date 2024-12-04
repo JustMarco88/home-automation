@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useSWR } from 'swr';
+import useSWR from 'swr';
 import { Line } from 'react-chartjs-2';
 
 interface WeatherData {

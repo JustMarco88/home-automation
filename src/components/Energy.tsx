@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useSWR } from 'swr';
+import useSWR from 'swr';
 import { EnergyPrice } from '@/lib/energy';
 import { Line } from 'react-chartjs-2';
 import {
@@ -54,7 +54,7 @@ export default function Energy() {
     );
   }
 
-  const prices = data.data.sort((a, b) => 
+  const prices = data.data.sort((a: EnergyPrice, b: EnergyPrice) => 
     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
@@ -62,7 +62,7 @@ export default function Energy() {
     datasets: [
       {
         label: 'Energy Price (€/kWh)',
-        data: prices.map(p => ({
+        data: prices.map((p: EnergyPrice) => ({
           x: new Date(p.timestamp),
           y: p.priceEnergy
         })),
@@ -72,7 +72,7 @@ export default function Energy() {
       },
       {
         label: 'Gas Price (€/m³)',
-        data: prices.map(p => ({
+        data: prices.map((p: EnergyPrice) => ({
           x: new Date(p.timestamp),
           y: p.priceGas
         })),

@@ -15,54 +15,22 @@ interface EnergyRecord {
   p1_counter_gas: number | null;
 }
 
-// Validation functions
-function validateDate(date: string): boolean {
-  const timestamp = Date.parse(date);
-  return !isNaN(timestamp) && timestamp > 0;
-}
-
-function validateNumber(value: number | null): boolean {
-  return value === null || (!isNaN(value) && value >= 0);
-}
-
-function validateRecord(record: EnergyRecord): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  if (!validateDate(record.date)) {
-    errors.push(`Invalid date: ${record.date}`);
-  }
-
-  if (!validateNumber(record.price_energy)) {
-    errors.push(`Invalid energy price: ${record.price_energy}`);
-  }
-
-  if (!validateNumber(record.p1_counter_energy)) {
-    errors.push(`Invalid energy counter: ${record.p1_counter_energy}`);
-  }
-
-  if (!validateNumber(record.price_gas)) {
-    errors.push(`Invalid gas price: ${record.price_gas}`);
-  }
-
-  if (!validateNumber(record.p1_counter_gas)) {
-    errors.push(`Invalid gas counter: ${record.p1_counter_gas}`);
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors
-  };
-}
-
 async function migrateData(startIndex: number = 0, batchSize: number = 10) {
+  console.log(`Starting migration batch: startIndex=${startIndex}, batchSize=${batchSize}`);
+  
   try {
     // Check if SQLite database exists
     const dbPath = path.join(process.cwd(), 'db-to-migrate', 'energy.db');
+    console.log('Looking for SQLite database at:', dbPath);
+    
     if (!fs.existsSync(dbPath)) {
+      console.error('Database file not found at:', dbPath);
       throw new Error(`SQLite database not found at ${dbPath}`);
     }
+    console.log('Found SQLite database');
 
     // First ensure the energy_prices table exists
+    console.log('Creating PostgreSQL table if not exists...');
     await sql.query(`
       CREATE TABLE IF NOT EXISTS energy_prices (
         id SERIAL PRIMARY KEY,
@@ -75,19 +43,26 @@ async function migrateData(startIndex: number = 0, batchSize: number = 10) {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    console.log('PostgreSQL table ready');
 
     // Open SQLite database
-    const db = new Database(dbPath);
+    console.log('Opening SQLite database...');
+    const db = new Database(dbPath, { verbose: console.log });
+    console.log('SQLite database opened');
 
     // Validate table structure
+    console.log('Checking SQLite table structure...');
     const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='prices'").get();
     if (!tableExists) {
       db.close();
       throw new Error("Table 'prices' not found in SQLite database");
     }
+    console.log('SQLite table structure valid');
 
     // Get total count
+    console.log('Getting total record count...');
     const totalCount = db.prepare('SELECT COUNT(*) as count FROM prices').get() as { count: number };
+    console.log(`Total records found: ${totalCount.count}`);
 
     // Validate batch parameters
     if (startIndex < 0) {
@@ -101,24 +76,19 @@ async function migrateData(startIndex: number = 0, batchSize: number = 10) {
     }
 
     // Get records for this batch
+    console.log(`Fetching batch of records: ${startIndex} to ${startIndex + batchSize}`);
     const records = db.prepare('SELECT * FROM prices ORDER BY date ASC LIMIT ? OFFSET ?')
       .all(batchSize, startIndex) as EnergyRecord[];
+    console.log(`Fetched ${records.length} records`);
 
     let successCount = 0;
     let errorCount = 0;
-    let validationErrors: { record: EnergyRecord; errors: string[] }[] = [];
 
     // Process records
+    console.log('Processing records...');
     for (const record of records) {
       try {
-        // Validate record
-        const validation = validateRecord(record);
-        if (!validation.valid) {
-          validationErrors.push({ record, errors: validation.errors });
-          errorCount++;
-          continue;
-        }
-
+        console.log('Processing record:', record.date);
         const timestamp = new Date(record.date).toISOString();
         await sql.query(`
           INSERT INTO energy_prices (
@@ -137,16 +107,19 @@ async function migrateData(startIndex: number = 0, batchSize: number = 10) {
         `, [timestamp, record.price_energy, record.p1_counter_energy, record.price_gas, record.p1_counter_gas]);
         
         successCount++;
+        console.log(`Successfully processed record ${successCount}/${records.length}`);
       } catch (error) {
-        console.error('Error inserting record:', error);
+        console.error('Error processing record:', error);
         errorCount++;
       }
     }
 
     // Close SQLite database
+    console.log('Closing SQLite database...');
     db.close();
+    console.log('SQLite database closed');
 
-    return {
+    const result = {
       success: true,
       message: 'Batch migration completed',
       results: {
@@ -160,10 +133,12 @@ async function migrateData(startIndex: number = 0, batchSize: number = 10) {
         },
         progress: `${startIndex + records.length}/${totalCount.count} records processed`,
         isComplete: startIndex + records.length >= totalCount.count,
-        nextBatch: startIndex + records.length < totalCount.count ? startIndex + records.length : null,
-        validationErrors: validationErrors.length > 0 ? validationErrors : undefined
+        nextBatch: startIndex + records.length < totalCount.count ? startIndex + records.length : null
       }
     };
+
+    console.log('Migration batch completed:', result);
+    return result;
   } catch (error) {
     console.error('Migration failed:', error);
     return {
@@ -174,13 +149,17 @@ async function migrateData(startIndex: number = 0, batchSize: number = 10) {
 }
 
 export async function GET(request: Request) {
+  console.log('Migration endpoint called');
   try {
     const { searchParams } = new URL(request.url);
     const startIndex = parseInt(searchParams.get('start') || '0', 10);
     const batchSize = parseInt(searchParams.get('batch') || '10', 10);
 
+    console.log('Migration parameters:', { startIndex, batchSize });
+
     // Validate query parameters
     if (isNaN(startIndex) || isNaN(batchSize)) {
+      console.error('Invalid query parameters');
       return NextResponse.json(
         { 
           success: false, 
@@ -193,6 +172,7 @@ export async function GET(request: Request) {
 
     // Limit batch size to prevent timeouts
     const limitedBatchSize = Math.min(batchSize, 50);
+    console.log('Using batch size:', limitedBatchSize);
 
     const result = await migrateData(startIndex, limitedBatchSize);
     return NextResponse.json(result);

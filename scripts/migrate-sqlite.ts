@@ -35,7 +35,8 @@ async function migrateData() {
       try {
         // Process each record in the batch
         for (const record of batch) {
-          await sql`
+          const timestamp = new Date(record.date).toISOString();
+          await sql.query(`
             INSERT INTO energy_prices (
               timestamp,
               price_energy,
@@ -43,19 +44,13 @@ async function migrateData() {
               price_gas,
               p1_counter_gas
             ) 
-            VALUES (
-              ${new Date(record.date)},
-              ${record.price_energy},
-              ${record.p1_counter_energy},
-              ${record.price_gas},
-              ${record.p1_counter_gas}
-            )
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (timestamp) DO UPDATE SET
               price_energy = EXCLUDED.price_energy,
               p1_counter_energy = EXCLUDED.p1_counter_energy,
               price_gas = EXCLUDED.price_gas,
               p1_counter_gas = EXCLUDED.p1_counter_gas
-          `;
+          `, [timestamp, record.price_energy, record.p1_counter_energy, record.price_gas, record.p1_counter_gas]);
         }
 
         successCount += batch.length;

@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 import path from 'path';
 
-// Disable body parsing, as we don't need it for this endpoint
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// New route segment config format
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
 async function migrateData() {
   try {

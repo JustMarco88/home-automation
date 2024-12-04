@@ -1,6 +1,5 @@
 import { sql } from '@vercel/postgres';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import Database from 'better-sqlite3';
 import path from 'path';
 
 interface EnergyRecord {
@@ -14,13 +13,10 @@ interface EnergyRecord {
 async function migrateData() {
   try {
     // Open SQLite database
-    const db = await open({
-      filename: path.join(process.cwd(), 'db-to-migrate', 'energy.db'),
-      driver: sqlite3.Database
-    });
+    const db = new Database(path.join(process.cwd(), 'db-to-migrate', 'energy.db'));
 
     // Get all records from SQLite
-    const records = await db.all<EnergyRecord[]>('SELECT * FROM prices ORDER BY date ASC');
+    const records = db.prepare('SELECT * FROM prices ORDER BY date ASC').all() as EnergyRecord[];
     console.log(`Found ${records.length} records to migrate`);
 
     // Batch size for inserting
